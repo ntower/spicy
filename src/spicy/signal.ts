@@ -20,7 +20,7 @@ export function createSignal<T>(initialValue: () => T): DependantSignal<T>;
 export function createSignal<T>(
   initialValue: T | (() => T)
 ): IndependentSignal<T> | DependantSignal<T> {
-  const isMutable = typeof initialValue !== "function";
+  const isIndependent = typeof initialValue !== "function";
   let currentValue: T;
   // TODO: does this need to be a WeakSet to prevent leaks?
   const dependants: Set<() => unknown> = new Set();
@@ -28,18 +28,16 @@ export function createSignal<T>(
   function getterAndSetter(): T;
   function getterAndSetter(newValue: T): void;
   function getterAndSetter(newValue?: T): T | void {
-    if (newValue && isMutable) {
+    if (newValue && isIndependent) {
       currentValue = newValue;
       for (const dependant of dependants.values()) {
         dependant();
       }
     } else {
       if (linkerStack.length > 0) {
-        // Another signal is initializing and it called us. We need to set it as a
-        //   dependency so we can update it in the future.
-
-        const linker = linkerStack[linkerStack.length - 1];
-        dependants.add(linker);
+        // Another signal is calculating its value, and it called us. We need to set
+        //   them as a dependency so we can update them in the future.
+        dependants.add(linkerStack[linkerStack.length - 1]);
       }
       return currentValue;
     }

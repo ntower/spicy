@@ -1,3 +1,7 @@
+import { createSignal } from "./spicy/signal";
+
 export const App = () => {
-  return <div>Hello World!</div>;
+  const name = createSignal("Bob");
+
+  return <div>Hello {name()}!</div>;
 };

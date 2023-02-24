@@ -6,7 +6,6 @@ describe("Signal", () => {
       expect(value()).toEqual(1);
     });
     test("should set new value", () => {
-      // TODO: figure out why ts is inferring it so strictly (as 1, not number)
       const value = createSignal(1);
       value(2);
       expect(value()).toEqual(2);
@@ -17,6 +16,16 @@ describe("Signal", () => {
     test("should set initial value", () => {
       const value = createSignal(1);
       const value2 = createSignal(() => value() + 1);
+      expect(value2()).toEqual(2);
+    });
+
+    test("should only function as a getter", () => {
+      const value = createSignal(1);
+      const value2 = createSignal(() => value() + 1);
+      //@ts-expect-error - the types correctly show it's an error to pass in 100.
+      //   This test is for if someone ignores the type error (or isn't using TS)
+      const result = value2(100);
+      expect(result).toEqual(2);
       expect(value2()).toEqual(2);
     });
 
