@@ -1,20 +1,35 @@
-type Linker = (unsubscribe: () => void) => () => unknown;
+export type IndependentSignal<T> = {
+  (): T;
+  (newValue: T): void;
+};
 
-const linkerStack: Linker[] = [];
+export type DependantSignal<T> = {
+  (): T;
+};
 
-// TODO: how to teardown signals? Make sure they aren't perpetual memory leaks.
+// A temporary holding space used for linking up signals to eachother
+const linkerStack: (() => void)[] = [];
 
-export const createSignal = <T>(initialValue: T | (() => T)) => {
+// eslint-disable-next-line @typescript-eslint/ban-types
+type NonFunction<T> = T extends Function ? never : T;
+
+export function createSignal<T>(
+  initialValue: NonFunction<T>
+): IndependentSignal<T>;
+export function createSignal<T>(initialValue: () => T): DependantSignal<T>;
+export function createSignal<T>(
+  initialValue: T | (() => T)
+): IndependentSignal<T> | DependantSignal<T> {
+  const isMutable = typeof initialValue !== "function";
   let currentValue: T;
+  // TODO: does this need to be a WeakSet to prevent leaks?
   const dependants: Set<() => unknown> = new Set();
 
   function getterAndSetter(): T;
   function getterAndSetter(newValue: T): void;
   function getterAndSetter(newValue?: T): T | void {
-    if (newValue) {
+    if (newValue && isMutable) {
       currentValue = newValue;
-      console.log("notifying", dependants.size, "dependants");
-      // TODO: do i need to clone the set before iterating? Not sure if `.values()` is a live view.
       for (const dependant of dependants.values()) {
         dependant();
       }
@@ -22,27 +37,22 @@ export const createSignal = <T>(initialValue: T | (() => T)) => {
       if (linkerStack.length > 0) {
         // Another signal is initializing and it called us. We need to set it as a
         //   dependency so we can update it in the future.
+
         const linker = linkerStack[linkerStack.length - 1];
-        const unsubscribe = () => dependants.delete(dependant);
-        const dependant = linker(unsubscribe);
-        dependants.add(dependant);
+        dependants.add(linker);
       }
       return currentValue;
     }
   }
 
   if (typeof initialValue === "function") {
-    console.log(">>> initializing with function");
-    const index = linkerStack.length;
     const initializer = initialValue as () => T;
 
     const recompute = () => {
-      console.log(">>> recompute called");
       /**
-       * TODO: handle changing dependencies when recomputing. For example, consider an
-       * initializer like this:
+       * Dependencies may change from one call of the initializer to the next, eg:
        *
-       * () => {
+       *  () => {
        *   const a = someSignal();
        *   if (a > 1) {
        *     return a;
@@ -51,23 +61,22 @@ export const createSignal = <T>(initialValue: T | (() => T)) => {
        *   }
        * }
        *
-       * We might need to add or remove a dependency.
+       * So we clear all the existing dependencies, then rerun the initializer. If
+       * no dependencies changed, then they'll all be added back. If there are more
+       * or less than before, we'll have all the new ones only.
        */
+      dependants.clear();
+      const index = linkerStack.length;
+      // Add self to the stack so other signals can find us
+      linkerStack[index] = recompute;
       currentValue = initializer();
+      linkerStack.length = index;
     };
 
-    const linker = (unsubscribe: () => void) => {
-      // TODO: save the unsubscribe function so we can call it if we later remove this dependency.
-      return recompute;
-    };
-
-    // Push self onto the stack so nested signals can find us
-    linkerStack[index] = linker;
-    currentValue = initializer();
-    linkerStack.length = index;
+    recompute();
   } else {
     currentValue = initialValue as T;
   }
 
   return getterAndSetter;
-};
+}
