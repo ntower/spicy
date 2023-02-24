@@ -1,0 +1,17 @@
+{
+  "name": "spicy",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Experimenting with making my own front end framework.",
+  "scripts": {
+    "start": "vite",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^4.9.3",
+    "vite": "^4.1.0"
+  }
+}
